@@ -1,0 +1,359 @@
+import pandas as pd
+from google.colab import drive
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as stats
+from scipy.stats import chi2_contingency
+
+
+drive.mount('/content/drive', force_remount = True)
+df1 = pd.read_csv('/content/drive/My Drive/Homework 3/Dataset Generation (2024) (Responses) - Form Responses 1.csv')
+df2 = pd.read_csv('/content/drive/My Drive/Homework 3/Dataset Generation (Fardina) (Responses) - Form Responses 1.csv')
+df3 = pd.read_csv('/content/drive/My Drive/Homework 3/Dataset Generation (Max) (Responses) - Form Responses 1.csv')
+
+df1['Data_Name'] = 2024
+df2['Data_Name'] = "Fadrina"
+df3['Data_Name'] = "Max"
+
+df1.rename(columns={'What year are you?': 'Year', 'How old are you?': 'Age' }, inplace=True)
+df1.rename(columns={'You could describe the adults you grew up with as...': 'Parent_political_orientation'}, inplace=True)
+df1.rename(columns={'You could describe yourself as...': 'Political_orientation', 'How would you rate your religiousness?': 'Religiousness/spirituality' }, inplace=True)
+df1.rename(columns={'What bests represents your gender?': 'Gender'}, inplace=True)
+
+df2.rename(columns={'What year are you?': 'Year', 'How old are you?': 'Age' }, inplace=True)
+df2.rename(columns={'You could describe the adults you grew up with as...': 'Parent_political_orientation'}, inplace=True)
+df2.rename(columns={'You could describe yourself as...': 'Political_orientation', 'How would you rate your religiousness / spirituality?': 'Religiousness/spirituality' }, inplace=True)
+df2.rename(columns={'What bests represents your gender?': 'Gender'}, inplace=True)
+
+df3.rename(columns={'What year are you?': 'Year', 'How old are you?': 'Age' }, inplace=True)
+df3.rename(columns={'You could describe the adults you grew up with as...': 'Parent_political_orientation'}, inplace=True)
+df3.rename(columns={'You could describe yourself as...': 'Political_orientation', 'How would you rate your religiousness / spirituality?': 'Religiousness/spirituality' }, inplace=True)
+df3.rename(columns={'What bests represents your gender?': 'Gender'}, inplace=True)
+
+
+df3 = df3[df3["Year"].notna()]
+df3["Year"].value_counts()
+
+#drop row since all other col values are empty
+df3 = df3[df3['Age'] != "50+"]
+sum(df3['Age'].isna())
+
+df3['Age'] = pd.to_numeric(df3['Age'], errors='coerce')
+
+# missing value is a senior and most seniors are 21
+seniors = df3[df3['Year'] == 'Senior']
+mode_age_seniors = seniors['Age'].mode()[0]
+df3['Age'] = df3["Age"].fillna(value=21)
+
+
+df2['Year'].value_counts()
+sum(df2['Year'].isna())
+# missing values are also missing under most other columns
+df2.dropna(subset=['Year'], inplace=True)
+
+
+
+
+df2['Age'].value_counts()
+df2 = df2[df2['Age'] != "50+"]
+# print(df2.to_string(index=True))
+df2['Age'] = pd.to_numeric(df2['Age'], errors='coerce')
+
+
+sum(df1['Year'].isna())
+df1['Age'] = pd.to_numeric(df1['Age'], errors='coerce')
+seniors = df1[df1['Year'] == 'Senior']
+mode_age_seniors = seniors['Age'].mode()[0]
+df1['Age'] = df1["Age"].fillna(value=21)
+df1.dropna(subset=['Gender'], inplace=True)
+df1.dropna(subset=["I was in a conflict with my father-in-law's girlfriend, in which I made a snide comment about she's never paid child support to his ex. Later, she called me and told me if I ever said anything like that ever again she'd sue me for defamation. I took the threat seriously, as she is a lawyer, and uninvited him for our wedding and told my family I couldn't be around him anymore. Am I a jerk?"], inplace=True)
+#mode imputation
+df1['Religiousness/spirituality'] = df1['Religiousness/spirituality'].fillna(value="Somewhat religious")
+# print(df1.to_string(index=True))
+
+df = pd.concat([df1, df2, df3], ignore_index=True)
+
+religious_spiritual_mapping = {
+    'Not spiritual at all': 0,
+    'Not religious at all': 0,
+    'Somewhat spiritual': 1,
+    'Somewhat religious': 1,
+    'Strongly spiritual': 2,
+    'Strongly religious': 2
+}
+
+# Apply the mapping to the column
+df['Religiousness/spirituality_numeric'] = df['Religiousness/spirituality'].map(religious_spiritual_mapping)
+
+df['Religiousness/spirituality_numeric'].value_counts()
+
+df1['Age'] = df1['Age'].astype(int)
+
+
+
+# Create a cross-tabulation of student and parent political orientations
+political_beliefs = pd.crosstab(df['Parent_political_orientation'],
+                                 df['Political_orientation'],
+                                 normalize='index')
+
+# Create a heatmap
+plt.figure(figsize=(10, 6))
+sns.heatmap(political_beliefs, annot=True, cmap="YlGnBu", fmt=".2f")
+plt.title("Student Political Beliefs vs. Parent Political Beliefs")
+plt.xlabel("Student Political Orientation")
+plt.ylabel("Parent Political Orientation")
+plt.show()
+
+political_belief_percentages = df['Political_orientation'].value_counts(normalize=True) * 100
+print(political_belief_percentages)
+
+
+
+
+# Get a list of outcome question columns, excluding 'Would you describe yourself as compassionate?'
+outcome_questions = [col for col in df2.columns if col != 'Would you describe yourself as compassionate?']
+
+# Loop through outcome questions
+for outcome_question in outcome_questions:
+    # Create contingency table, ensuring both columns have valid data
+    contingency_table = pd.crosstab(df2['Would you describe yourself as compassionate?'].dropna(),
+                                     df2[outcome_question].dropna())
+
+    # Check if the contingency table is empty before proceeding
+    if contingency_table.empty:
+        print(f"Warning: Empty contingency table for {outcome_question}. Skipping...")
+        continue
+
+    chi2, p_value, dof, expected = stats.chi2_contingency(contingency_table)
+
+    # Only print if p-value is less than or equal to 0.05
+    if p_value <= 0.05:
+        print(f"Outcome Question: {outcome_question}")
+        print(f"Chi-squared statistic: {chi2}")
+        print(f"P-value: {p_value}")
+        print("-" * 20)
+
+
+paired_questions = {
+    "I have a child with a mother who never wanted anything to do with them. I make enough money to cover my expenses, but I constantly check up on the child's mother to make sure she's paying adequate child support. Periodically I either hire an investigator or her mom just tells me she got a raise and I go to court to adjust the child support accordingly. The last time I did this, she didn't show up for court and I apparently overestimated how much her raise was and I got a default judgment. She called me up and practically pleaded with me to lower her payments after I said no she insulted me and my son. Am I a jerk?":
+    "I have a child with a father who never wanted anything to do with them. I make enough money to cover my expenses, but I constantly check up on the child's father to make sure he's paying adequate child support. Periodically I either hire an investigator or her dad just tells me he got a raise and I go to court to adjust the child support accordingly. The last time I did this, he didn't show up for court and I apparently overestimated how much his raise was and I got a default judgment. He called me up and practically pleaded with me to lower his payments after I said no he insulted me and my son. Am I a jerk?",
+
+    "I was in a conflict with my mother-in-law's boyfriend, in which I made a snide comment about he's never paid child support to his ex. Later, he called me and told me if I ever said anything like that ever again he'd sue me for defamation. I took the threat seriously, as he is a lawyer, and uninvited him for our wedding and told my family I couldn't be around him anymore. Am I a jerk?":
+    "I was in a conflict with my father-in-law's girlfriend, in which I made a snide comment about she's never paid child support to his ex. Later, she called me and told me if I ever said anything like that ever again she'd sue me for defamation. I took the threat seriously, as she is a lawyer, and uninvited him for our wedding and told my family I couldn't be around him anymore. Am I a jerk?",
+
+    "I'm a single mom with four kids, one of whom has a different father from the other three. I get a lot of child support for one of them, and none for the other 3. 2/3rds of the child support for the eldest go towards his expenses and college fund. The other third goes towards my other children. My friend recently found out and told me it was inappropriate to use the child support intended for the one on the other three. Am I a jerk?":
+    "I'm a single dad with four kids, one of whom has a different mother from the other three. I get a lot of child support for one of them, and none for the other 3. 2/3rds of the child support for the eldest go towards his expenses and college fund. The other third goes towards my other children. My friend recently found out and told me it was inappropriate to use the child support intended for the one on the other three. Am I a jerk?",
+
+    "I'm a trust fund kid; I get a healthy 'allowance' from my parents, but I mostly sock it away since I don't really feel like I deserve it. I live with my girlfriend, who comes from a poor family, and we split things 50-50. Recently, she found out how much money my parents send me each month and freaked out, saying it wasn't fair that I was making her split things 50/50. I told her it was my money, and it only seems fair if we cover half the expenses. Am I a jerk?":
+    "I'm a trust fund kid; I get a healthy 'allowance' from my parents, but I mostly sock it away since I don't really feel like I deserve it. I live with my boyfriend, who comes from a poor family, and we split things 50-50. Recently, he found out how much money my parents send me each month and freaked out, saying it wasn't fair that I was making him split things 50/50. I told him it was my money, and it only seems fair if we cover half the expenses. Am I a jerk?",
+
+    "My girlfriend is a doctor. Lately she's been complaining about pain in her right knee and constantly taking TONS of ibuprofen to treat (like 15-20 pills a day). However, it's only gotten worse. I've told her she needs to see someone about it but she told me it was fine. So I told her that if this is how she treats herself, I'd be concerned about being her patient. She was shocked and told me that was uncalled for. Am I a jerk?":
+    "My boyfriend is a doctor. Lately he's been complaining about pain in his right knee and constantly taking TONS of ibuprofen to treat (like 15-20 pills a day). However, it's only gotten worse. I've told him he needs to see someone about it but he told me it was fine. So I told him that if this is how he treats herself, I'd be concerned about being his patient. He was shocked and told me that was uncalled for. Am I a jerk?",
+
+    "My sister's nine year old daughter is poorly behaved. One day, my sister dropped the daughter off on my doorstep without my consent and drove off, texting me that she needed me to watch her daughter for the day. The daughter complained of being hungry, so I gave her the leftovers I had. She said she didn't like them, but I told her that's all there was. She put them in the microwave until they burned, then told me she couldn't eat them and we would have to go out and get food. I told her that was what there was to eat, and if she ruined it she'd have to wait for her mom to get back. Later, everyone yelled at me for 'starving' a child. Am I a jerk?":
+    "My brother's nine year old son is poorly behaved. One day, my brother dropped the son off on my doorstep without my consent and drove off, texting me that he needed me to watch his son for the day. The son complained of being hungry, so I gave him the leftovers I had. He said he didn't like them, but I told him that's all there was. He put them in the microwave until they burned, then told me he couldn't eat them and we would have to go out and get food. I told him that was what there was to eat, and if he ruined it he'd have to wait for his dad to get back. Later, everyone yelled at me for 'starving' a child. Am I a jerk?",
+
+    "My sister is going to be a bridesmaid at my wedding. Her hair was dyed, but she recently decided to grow it out, so parts of it are bleached and part are not. I told her it wouldn't look good in the pictures, and offered to pay for her to dye it. She said no, and I said she couldn't be in the wedding party. Am I a jerk?":
+    "My brother is going to be a groomsman at my wedding. His hair was dyed, but he recently decided to grow it out, so parts of it are bleached and part are not. I told him it wouldn't look good in the pictures, and offered to pay for him to dye it. He said no, and I said he couldn't be in the wedding party. Am I a jerk?",
+
+    "My parents want us to come out for their anniversary, and bought my sister and I tickets on the same flight. My sister has two kids - a 6 month old and a 5 year old. She is currently separated from her husband so she would have to handle 2 children by herself on a 10 hour flight.\n\nShe calls me up a week or so beforehand and asks me if I will be willing to help her take care of her kids on the flight, and something about taking shifts so we can both sleep. I tell her that I wasn't comfortable with that, but she says \"nephew loves you so much\" so we can work something out on the flight and hangs up.\n\nWhen I got to the airport, I chose to upgrade my seat so I could sit by myself and didn't mention it until we were on the plane. My family freaked and told me I abandoned my sister. Am I a jerk?":
+    "My parents want us to come out for their anniversary, and bought my brother and I tickets on the same flight. My brother has two kids - a 6 month old and a 5 year old. He is currently separated from his wife so he would have to handle 2 children by herself on a 10 hour flight.\n\nHe calls me up a week or so beforehand and asks me if I will be willing to help him take care of his kids on the flight, and something about taking shifts so we can both sleep. I tell him that I wasn't comfortable with that, but he says \"nephew loves you so much\" so we can work something out on the flight and hangs up.\n\nWhen I got to the airport, I chose to upgrade my seat so I could sit by myself and didn't mention it until we were on the plane. My family freaked and told me I abandoned my brother. Am I a jerk?",
+
+    "My wife and I have separate finances, but I pay for almost everything. My son starts school next year, and I'm planning on sending him to a private school. My wife's son currently goes to a much less nice public school. My wife says I'm a jerk for not paying for her daughter to go to private school as well.":
+    "My husband and I have separate finances, but I pay for almost everything. My son starts school next year, and I'm planning on sending him to a private school. My husband's son currently goes to a much less nice public school. My husband says I'm a jerk for not paying for his son to go to private school as well.",
+
+    "My daughter is getting married soon. I only learned about her a few years ago. We've been building a relationship the last few years though and I am lucky to have her in my life now. Recently, she asked me to walk her down the aisle and while I am honored I told her no. Her step-dad practically raised her from a baby and I think that he deserves it far more than me. She was really upset and hurt when I said no. Am I a jerk?":
+    "My son is getting married soon. Due to a complicated past, we've only just met recently. We've been building a relationship the last few years though and I am lucky to have him in my life now. Recently, he asked me to do a reading with his father while I am honored I told him no. His step-mother practically raised him from a baby and I think that she deserves it far more than me. He was really upset and hurt when I said no. Am I a jerk?",
+
+    "One of my children wants to go to an expensive school to become a dentist. I told them I'd be fine paying for it. The other one wants to go to a similarly expensive school to become a teacher. I told her that I wouldn't pay for her schooling unless she picked a career path that will make at least 100,000 a year. Am I a jerk?":
+    "One of my children wants to go to an expensive school to become a dentist. I told them I'd be fine paying for it. The other one wants to go to a similarly expensive school to become a teacher. I told her that I wouldn't pay for him schooling unless he picked a career path that will make at least 100,000 a year. Am I a jerk?",
+
+    "My sister is going to be a bridesmaid at my wedding. Her hair was dyed, but she recently decided to grow it out, so parts of it are bleached and part are not. I told her it wouldn't look good in the pictures, and offered to pay for her to dye it. She said no, and I said she couldn't be in the wedding party. Am I a jerk?":
+    "My brother is going to be a groomsman at my wedding. His hair was dyed, but he recently decided to grow it out, so parts of it are bleached and part are not. I told him it wouldn't look good in the pictures, and offered to pay for him to dye it. He said no, and I said he couldn't be in the wedding party. Am I a jerk?"
+
+}
+
+
+# Combine DataFrames and add a source column
+df3['dataset_source'] = 'gender1'
+df1['dataset_source'] = 'gender2'
+df_combined = pd.concat([df3, df1], ignore_index=True)
+
+significant_questions = []
+
+for gender1_version, gender2_version in paired_questions.items():
+    # Responses from df3 for the gender1 version question
+    gender1_responses = df3[gender1_version].dropna()
+
+    # Responses from df1 for the gender2 version question
+    gender2_responses = df1[gender2_version].dropna()
+
+    # Combine responses and create a new DataFrame for crosstab
+    responses_df = pd.DataFrame({
+        'Gender': ['gender1'] * len(gender1_responses) + ['gender2'] * len(gender2_responses),
+        'Response': pd.concat([gender1_responses, gender2_responses])
+    })
+
+    # Create contingency table
+    contingency_table = pd.crosstab(responses_df['Gender'], responses_df['Response'])
+
+    # Check for sufficient data
+    if contingency_table.shape[0] < 2 or contingency_table.shape[1] < 2:
+        print(f"Warning: Insufficient data for {gender1_version}. Skipping...")
+        continue
+
+    # Perform chi-square test
+    chi2, p_value, _, _ = stats.chi2_contingency(contingency_table)
+
+    # Check for significance
+    if p_value <= 0.05:
+        significant_questions.append((gender1_version, gender2_version))
+        print(f"Question Pair: {gender1_version} vs. {gender2_version}")
+        print(f"Chi-squared statistic: {chi2}")
+        print(f"P-value: {p_value}")
+        print("-" * 20)
+
+# Extract the hour from the timestamp
+df['Timestamp'] = pd.to_datetime(df['Timestamp'])  # Convert to datetime objects
+
+# Extract the hour from the timestamp
+df['Hour'] = df['Timestamp'].dt.hour
+
+# Get the most frequent hour
+most_frequent_hour = df['Hour'].mode()[0]
+
+print(f"Most surveys were completed at hour: {most_frequent_hour}")
+
+from scipy.stats import chi2_contingency
+import numpy as np
+
+df1['Age'] = df1['Age'].astype(str)
+df1['Timestamp'] = pd.to_datetime(df1['Timestamp'])
+
+def calculate_cramers_v(x, y):
+    ct = pd.crosstab(index=df1[x], columns=df1[y])  # Cross-tabulation
+    chi2, _, _, _ = chi2_contingency(ct, correction=False)  # Chi-squared test
+
+    n = ct.sum().sum()  # Total number of observations
+    r, k = ct.shape  # Number of rows and columns in the cross-tab
+
+    # Avoid division by zero by checking if r or k is <= 1
+    if min(r, k) <= 1:
+        return np.nan
+
+    # Calculate Cramér's V
+    cramers_v_value = np.sqrt(chi2 / (n * (min(r, k) - 1)))
+
+    return cramers_v_value
+
+
+max_v_value = 0
+max_columns = None
+
+for column in df1.columns:
+    if column == 'Timestamp':  # Skip the Timestamp column
+        continue
+
+    for column2 in df1.columns:
+        if column2 == 'Timestamp' or column == column2:  # Skip Timestamp and self-correlation
+            continue
+
+        if df1[column].dtype == 'object' and df1[column2].dtype == 'object': #Checking if both columns are categorical
+          cramers_v_value = calculate_cramers_v(column, column2)
+          if not np.isnan(cramers_v_value) and cramers_v_value > max_v_value:
+              max_v_value = cramers_v_value
+              max_columns = (column, column2)
+
+print(f"Maximum Cramer's V: {max_v_value}")
+print(f"Columns with maximum Cramer's V: {max_columns}")
+
+def calculate_cramers_v(x, y):
+    confusion_matrix = pd.crosstab(df1[x], df1[y])
+    chi2 = chi2_contingency(confusion_matrix)[0]
+    n = confusion_matrix.sum().sum()
+    phi2 = chi2 / n
+    r, k = confusion_matrix.shape
+
+    phi2corr = max(0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+    rcorr = r - ((r - 1)**2) / (n - 1)
+    kcorr = k - ((k - 1)**2) / (n - 1)
+
+
+    denominator = min((kcorr - 1), (rcorr - 1))
+    if denominator == 0:
+        return 0  # Return 0 if denominator is 0
+    else:
+        return np.sqrt(phi2corr / denominator)
+
+
+religious_views_column = 'Religiousness/spirituality'
+max_v_value = 0
+most_influenced_question = None
+
+for question_column in df1.columns:
+    if question_column == religious_views_column or question_column == 'Timestamp':
+        continue  # Skip religious views column and Timestamp
+
+    cramers_v_value = calculate_cramers_v(religious_views_column, question_column)
+    if not np.isnan(cramers_v_value) and cramers_v_value > max_v_value:
+        max_v_value = cramers_v_value
+        most_influenced_question = question_column
+
+print(f"Question most influenced by religious views: {most_influenced_question}")
+print(f"Cramer's V value: {max_v_value}")
+
+df1['graduateOrNot'] = df['Year'].apply(lambda x: "graduate" if x == "Graduate Student" else "undergraduate")
+student_level_column = 'graduateOrNot'
+significant_questions = []
+alpha = 0.05  # Significance level
+
+question_columns = [col for col in df1.columns if col not in (student_level_column, 'Timestamp')]
+for question_column in question_columns:
+    # Create contingency table
+    contingency_table = pd.crosstab(df1[student_level_column], df1[question_column])
+
+    # Perform chi-squared test
+    chi2, p_value, _, _ = chi2_contingency(contingency_table)
+
+    # Check for significance
+    if p_value < alpha:
+        significant_questions.append(question_column)
+
+# Print the significant questions
+print("Questions with statistically significant differences between graduate and undergraduate students:")
+for question in significant_questions:
+    print(question)
+
+
+df1['Timestamp'] = pd.to_datetime(df1['Timestamp'])
+
+
+bins = [0, 6, 12, 18, 24]  # Hours for morning, afternoon, evening, night
+labels = ['Night', 'Morning', 'Afternoon', 'Evening']
+
+# Create a new column with time categories
+df1['TimeCategory'] = pd.cut(df1['Timestamp'].dt.hour, bins=bins, labels=labels, right=False, include_lowest=True)
+
+# Identify significant questions
+significant_questions = []
+alpha = 0.05  # Significance level
+
+for question_column in question_columns:
+    if question_column == 'Timestamp' or question_column == 'TimeCategory':
+        continue  # Skip Timestamp and TimeCategory columns
+
+    # Create contingency table
+    contingency_table = pd.crosstab(df1['TimeCategory'], df1[question_column])
+
+    # Perform chi-squared test
+    chi2_stat, p_value, dof, expected = chi2_contingency(contingency_table)
+
+    # Check for significance
+    if p_value < alpha:
+        significant_questions.append(question_column)
+
+# Print the significant questions
+print("Questions with statistically significant differences based on time of day:")
+for question in significant_questions:
+    print(question)
+
